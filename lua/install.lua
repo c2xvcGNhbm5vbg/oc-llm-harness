@@ -20,53 +20,79 @@
 -- The LLM server address is NOT stored in the repo — it lives in the on-computer
 -- /etc/oc-llm.conf, so the repo stays free of any private network details.
 --
--- Check which version you have:
+-- Check which version you have (positional keyword — OC's `lua` command strips
+-- `--`-prefixed tokens, so flags like `--version` never reach the script):
 --
---     lua /home/install.lua --version
+--     lua /home/install.lua version
 
 local component = require("component")
 local fs = require("filesystem")
 local internet = require("internet")
 
 -- Bump this on every change to install.lua so you can tell which copy you have.
-local VERSION = "1.1.0"
+local VERSION = "1.2.0"
 
 -- The `lua` command invokes a script as `pcall(script, table.unpack(args, 2))`,
 -- so command-line arguments arrive as VARARGS (select(1, ...)), not via the
 -- `arg` global. Read the URL from the vararg; fall back to the `arg` table
 -- only if some other invocation method populates it.
-local BASE = select(1, ...)
-if not BASE then
+-- NOTE: OC's `lua` command runs `shell.parse(...)`, which STRIPS any `--`-prefixed
+-- token into an options table and discards it — only positional args reach the
+-- script via `table.unpack(args, 2)`. So we use positional keywords, NOT `--` flags:
+--
+--     lua /home/install.lua <raw_base_url> [debug]
+--     lua /home/install.lua version
+--
+-- "debug" (anywhere) also installs /home/debug.lua; "version" prints the version
+-- and exits.
+local n = select("#", ...)
+local ARGS = {}
+for i = 1, n do
+  ARGS[i] = select(i, ...)
+end
+-- Fallback to the `arg` table if some other invocation method populates it.
+if n == 0 then
   local a = rawget(_G, "arg")
-  BASE = a and a[1]
+  if a then
+    for i = 1, #a do ARGS[i] = a[i] end
+  end
 end
 
--- --version: print which copy of install.lua you have and exit.
-for i = 1, select("#", ...) do
-  if select(i, ...) == "--version" then
+-- "version": print which copy of install.lua you have and exit.
+for i = 1, #ARGS do
+  if ARGS[i] == "version" then
     print("install.lua version " .. VERSION)
     return
   end
 end
 
+-- "debug" (anywhere): also install the in-game test suite.
+local DEBUG = false
+for i = 1, #ARGS do
+  if ARGS[i] == "debug" then
+    DEBUG = true
+  end
+end
+
+-- The first non-keyword arg is the base URL.
+local BASE = nil
+for i = 1, #ARGS do
+  if ARGS[i] ~= "version" and ARGS[i] ~= "debug" then
+    BASE = ARGS[i]
+    break
+  end
+end
+
 if not BASE then
-  print("Usage: lua /home/install.lua <raw_base_url> [--debug]")
+  print("Usage: lua /home/install.lua <raw_base_url> [debug]")
   print("  e.g. lua /home/install.lua https://raw.githubusercontent.com/<owner>/<repo>/main")
-  print("  --debug: also install /home/debug.lua (in-game test suite)")
-  print("  --version: print the version of this installer and exit")
+  print("  debug: also install /home/debug.lua (in-game test suite)")
+  print("  version: print the version of this installer and exit")
   print("(First get install.lua via: wget -f <.../lua/install.lua> /home/install.lua)")
   return
 end
 -- Normalise: strip a trailing slash.
 BASE = BASE:gsub("/$", "")
-
--- Scan the remaining varargs for --debug (install the in-game test suite too).
-local DEBUG = false
-for i = 2, select("#", ...) do
-  if select(i, ...) == "--debug" then
-    DEBUG = true
-  end
-end
 
 if not component.isAvailable("internet") then
   print("This installer needs an internet card installed.")
