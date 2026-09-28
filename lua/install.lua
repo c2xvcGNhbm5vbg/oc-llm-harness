@@ -24,7 +24,15 @@ local component = require("component")
 local fs = require("filesystem")
 local internet = require("internet")
 
-local BASE = (arg and arg[1]) or nil
+-- The `lua` command invokes a script as `pcall(script, table.unpack(args, 2))`,
+-- so command-line arguments arrive as VARARGS (select(1, ...)), not via the
+-- `arg` global. Read the URL from the vararg; fall back to the `arg` table
+-- only if some other invocation method populates it.
+local BASE = select(1, ...)
+if not BASE then
+  local a = rawget(_G, "arg")
+  BASE = a and a[1]
+end
 if not BASE then
   print("Usage: lua /home/install.lua <raw_base_url>")
   print("  e.g. lua /home/install.lua https://raw.githubusercontent.com/<owner>/<repo>/main")
