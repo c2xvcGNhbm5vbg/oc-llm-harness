@@ -63,7 +63,7 @@ local function test_card_probe()
 
   local empty, data, total = 0, 0, 0
   while true do
-    local chunk, r = request()
+    local chunk, r = request.read()
     if not chunk then
       if r then
         return record("card probe: read loop", false, "read error: " .. r)
