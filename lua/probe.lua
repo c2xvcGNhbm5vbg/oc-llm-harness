@@ -2,31 +2,25 @@
 --
 -- Run:  lua /home/probe.lua TESTARG
 --
--- It reports which mechanism carries the argument: the `arg` table, or the
--- vararg `...`. This tells us exactly how install.lua should read its URL.
+-- The `lua` command invokes a script as `pcall(script, table.unpack(args, 2))`,
+-- so command-line arguments arrive as VARARGS. A chunk loaded via `load` is
+-- vararg, so `...` is valid at top level. This reports what the vararg and the
+-- `arg` global each carry.
 
 print("== probe ==")
 
--- 1) The `arg` global.
+-- 1) The vararg (valid at top level of a vararg chunk).
+local vfirst = select(1, ...)
+local vcount = select("#", ...)
+print("vararg #   = " .. tostring(vcount))
+print("vararg[1] = " .. tostring(vfirst))
+
+-- 2) The `arg` global (usually empty when invoked via the `lua` command).
 local a = rawget(_G, "arg")
 print("type(arg)  = " .. tostring(a))
 if a ~= nil then
   print("arg[0]  = " .. tostring(a[0]))
   print("arg[1]  = " .. tostring(a[1]))
-  print("arg[2]  = " .. tostring(a[2]))
-end
-
--- 2) The vararg (only valid if the loaded chunk is vararg).
-local n = 0
-local first
-local okv, v = pcall(function()
-  first = select(1, ...)
-  n = select("#", ...)
-end)
-print("vararg ok  = " .. tostring(okv))
-if okv then
-  print("vararg #   = " .. tostring(n))
-  print("vararg[1] = " .. tostring(first))
 end
 
 print("== end probe ==")

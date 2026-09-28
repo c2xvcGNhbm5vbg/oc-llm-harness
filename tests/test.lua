@@ -47,24 +47,26 @@ local mock_internet = {
   _last_request = nil,
 }
 
--- The request object returned by internet.request: it is a callable that reads
--- chunks until nil (EOF).
-local function make_request(raw)
-  -- Split raw into a couple of chunks to exercise the read_all loop.
+-- The request object returned by internet.request, mimicking the REAL card API:
+--   req.finishConnect()  -- block until the response is ready
+--   req.response()       -- -> status, message, headers-table
+--   req()               -- -> next body chunk (body ONLY, no headers) ... nil at EOF
+--   req.close()
+local function make_request(status, headers, body)
   local req = {}
   local pos = 1
-  local function read()
-    if pos > #raw then
+  function req.finishConnect() end
+  function req.response() return status, "OK", headers end
+  function req.read()
+    if pos > #body then
       return nil          -- EOF
     end
-    local chunk = raw:sub(pos, pos + 7)
+    local chunk = body:sub(pos, pos + 7)
     pos = pos + 8
     return chunk
   end
-  req.read = read
   req.close = function() end
-  -- Make the table callable.
-  return setmetatable(req, {__call = function() return read() end})
+  return setmetatable(req, {__call = function() return req.read() end})
 end
 
 function mock_internet.request(url, data, headers, method)
@@ -155,18 +157,9 @@ end
 section("http (mocked)")
 local http = require("http")
 
--- A canned full HTTP response.
-local canned = table.concat({
-  "HTTP/1.1 200 OK\r\n",
-  "Content-Type: application/json\r\n",
-  "Content-Length: 27\r\n",
-  "Connection: close\r\n",
-  "\r\n",
-  '{"status":"ok","n":42}',
-})
-
+-- A canned 200 response: status + headers from response(), body-only stream.
 mock_internet._next_response = function(method, url, data, headers)
-  return make_request(canned), nil
+  return make_request(200, {["Content-Type"] = "application/json", ["Content-Length"] = "27"}, '{"status":"ok","n":42}'), nil
 end
 
 local resp, reason = http.request("http://example.test/x", {method = "GET"})
@@ -179,7 +172,7 @@ end
 
 -- POST with body + headers.
 mock_internet._next_response = function(method, url, data, headers)
-  return make_request("HTTP/1.1 201 Created\r\n\r\n"), nil
+  return make_request(201, {["Content-Type"] = "text/plain"}, ""), nil
 end
 local resp2, reason2 = http.post_json("http://example.test/submit", {a = 1, b = "x"}, {})
 ok(resp2 ~= nil, "post_json returned (reason=" .. tostring(reason2) .. ")")
@@ -204,22 +197,12 @@ ok(resp3 == nil and reason3 == "no internet card", "error passthrough: " .. tost
 -- 3. LLM end-to-end (real local vLLM, if reachable)
 -------------------------------------------------------------------------------
 
-section("llm (real, if reachable)")
+section("llm (canned model responses)")
 local llm = require("llm")
 
--- Try to reach the real local endpoint. We point the mock internet at the real
--- network by NOT stubbing it here — instead we do a direct socket test via the
--- real `internet` if available. On this host we just test the llm logic against
--- a canned model response, and separately note that a real run is done in the
--- e2e test below.
 mock_internet._next_response = function(method, url, data, headers)
-  local canned_model = table.concat({
-    "HTTP/1.1 200 OK\r\n",
-    "Content-Type: application/json\r\n",
-    "\r\n",
-    '{"choices":[{"message":{"role":"assistant","content":"Hello from the mock model"},"finish_reason":"stop"}]}',
-  })
-  return make_request(canned_model), nil
+  return make_request(200, {["Content-Type"] = "application/json"},
+    '{"choices":[{"message":{"role":"assistant","content":"Hello from the mock model"},"finish_reason":"stop"}]}'), nil
 end
 
 llm.reset()
@@ -232,11 +215,8 @@ ok(#h == 2 and h[1].role == "user" and h[2].role == "assistant",
 
 -- Thinking-model fallback: content nil, reasoning present.
 mock_internet._next_response = function()
-  local canned = table.concat({
-    "HTTP/1.1 200 OK\r\n\r\n",
-    '{"choices":[{"message":{"role":"assistant","content":null,"reasoning":"I am thinking and here is my eventual answer."},"finish_reason":"stop"}]}',
-  })
-  return make_request(canned), nil
+  return make_request(200, {["Content-Type"] = "application/json"},
+    '{"choices":[{"message":{"role":"assistant","content":null,"reasoning":"I am thinking and here is my eventual answer."},"finish_reason":"stop"}]}'), nil
 end
 llm.reset()
 local reply2, reason2 = llm.ask("Think about it")
@@ -245,8 +225,7 @@ ok(reply2 ~= nil and reply2:find("answer") ~= nil,
 
 -- Error: HTTP 500.
 mock_internet._next_response = function()
-  local canned = "HTTP/1.1 500 Internal Server Error\r\n\r\nboom"
-  return make_request(canned), nil
+  return make_request(500, {}, "boom"), nil
 end
 local reply3, reason3 = llm.ask("x")
 ok(reply3 == nil and reason3:find("500") ~= nil,

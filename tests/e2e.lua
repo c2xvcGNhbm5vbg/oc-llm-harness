@@ -67,14 +67,33 @@ local function build_request(method, url, body, headers)
     return nil, "read failed: " .. tostring(err)
   end
 
-  -- Wrap as an OC-style stream (callable, reads chunks until nil).
+  -- Parse the raw HTTP response into status / headers / body (the card delivers
+  -- status+headers via response() and the body via the stream).
+  local sep_pos = raw:find("\r\n\r\n", 1, true)
+  local sep_len = 4
+  if not sep_pos then
+    sep_pos = raw:find("\n\n", 1, true)
+    sep_len = 2
+  end
+  local head = raw:sub(1, sep_pos - 1)
+  local body = raw:sub(sep_pos + sep_len)
+  local status = head:match("^HTTP/%d+%.%d+ (%d+)")
+  local headers = {}
+  for line in head:gmatch("[^\r\n]+") do
+    local k, v = line:match("^(%S+):%s*(.*)$")
+    if k then headers[k:lower()] = v end
+  end
+
+  -- Wrap as an OC-style request (real card API: finishConnect + response + stream).
   local pos = 1
   local request = {}
+  function request.finishConnect() end
+  function request.response() return tonumber(status), "OK", headers end
   function request.read()
-    if pos > #raw then
+    if pos > #body then
       return nil
     end
-    local chunk = raw:sub(pos, pos + 9)
+    local chunk = body:sub(pos, pos + 9)
     pos = pos + 10
     return chunk
   end

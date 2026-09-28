@@ -109,6 +109,11 @@ ensure_dir(ETC)
 local all_ok = true
 for _, f in ipairs(files) do
   local url = BASE .. "/" .. f[1]
+  -- Remove any stale copy first, so a re-download can't leave a partial/old file
+  -- behind (the config file is NOT in this list, so it is never touched).
+  if fs.exists(f[2]) then
+    fs.remove(f[2])
+  end
   local ok, reason = download(url, f[2])
   if ok then
     print("  ok   " .. f[2])
