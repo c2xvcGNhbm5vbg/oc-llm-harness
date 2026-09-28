@@ -19,10 +19,17 @@
 --
 -- The LLM server address is NOT stored in the repo — it lives in the on-computer
 -- /etc/oc-llm.conf, so the repo stays free of any private network details.
+--
+-- Check which version you have:
+--
+--     lua /home/install.lua --version
 
 local component = require("component")
 local fs = require("filesystem")
 local internet = require("internet")
+
+-- Bump this on every change to install.lua so you can tell which copy you have.
+local VERSION = "1.1.0"
 
 -- The `lua` command invokes a script as `pcall(script, table.unpack(args, 2))`,
 -- so command-line arguments arrive as VARARGS (select(1, ...)), not via the
@@ -33,10 +40,20 @@ if not BASE then
   local a = rawget(_G, "arg")
   BASE = a and a[1]
 end
+
+-- --version: print which copy of install.lua you have and exit.
+for i = 1, select("#", ...) do
+  if select(i, ...) == "--version" then
+    print("install.lua version " .. VERSION)
+    return
+  end
+end
+
 if not BASE then
   print("Usage: lua /home/install.lua <raw_base_url> [--debug]")
   print("  e.g. lua /home/install.lua https://raw.githubusercontent.com/<owner>/<repo>/main")
   print("  --debug: also install /home/debug.lua (in-game test suite)")
+  print("  --version: print the version of this installer and exit")
   print("(First get install.lua via: wget -f <.../lua/install.lua> /home/install.lua)")
   return
 end
@@ -113,7 +130,7 @@ if DEBUG then
   table.insert(files, { "lua/debug.lua", HOME .. "/debug.lua" })
 end
 
-print("Installing OC LLM harness from " .. BASE .. " ...")
+print("Installing OC LLM harness (install.lua " .. VERSION .. ") from " .. BASE .. " ...")
 ensure_dir(LIB)
 ensure_dir(HOME)
 ensure_dir(ETC)
