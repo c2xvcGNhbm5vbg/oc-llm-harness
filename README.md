@@ -8,6 +8,17 @@ This is a small, dependency-free set of Lua modules for the OpenComputers Lua
 runtime (Lua 5.2 / LuaJ), plus an installer that the computer itself runs to pull
 these files from GitHub over its internet card.
 
+## Intended use: local inference servers only
+
+This harness is designed to talk to a **local / self-hosted** LLM server on your
+own network — e.g. a local vLLM, llama.cpp, or Ollama instance exposing an
+OpenAI-compatible `/v1/chat/completions` API.
+
+It is **not** intended for public LLM provider APIs, and there are **no plans to
+support any real provider** (OpenAI, Anthropic, etc.). There is no API-key
+handling and no cloud endpoint support — the model is expected to be reachable
+from the computer over the internet card (typically on your LAN).
+
 ## What's here
 
 | File | Purpose |
@@ -38,20 +49,33 @@ internet-card filtering rules must **allow** the LLM server's address — see
 ## Install (in-game)
 
 1. Make sure the computer has an **internet card** installed.
-2. Run the installer, pointing it at this repo's raw file base:
+
+2. **Bootstrap:** `install.lua` has to be on the computer first (the `lua` command
+   runs a *local* file — it doesn't download one). Grab it with the built-in
+   `wget`:
 
    ```
-   lua install https://raw.githubusercontent.com/<owner>/<repo>/main
+   wget -f https://raw.githubusercontent.com/c2xvcGNhbm5vbg/oc-llm-harness/main/lua/install.lua /home/install.lua
    ```
 
-   (Use `master` if that's your default branch.)
+3. **Run the installer**, pointing it at this repo's raw file base:
 
-   It downloads the modules into `/lib/`, the chat program into `/home/`, and
-   writes a default `/etc/oc-llm.conf`.
+   ```
+   lua /home/install.lua https://raw.githubusercontent.com/c2xvcGNhbm5vbg/oc-llm-harness/main
+   ```
 
-3. **Edit `/etc/oc-llm.conf`** and set `base_url` to the address of your LLM
+   It downloads the remaining modules into `/lib/`, the chat program into
+   `/home/`, and writes a default `/etc/oc-llm.conf`.
+
+   (How it works: `lua <file>` reads a *local* file named `<file>` and runs it,
+   passing everything after the filename as arguments. So `lua /home/install.lua
+   <url>` runs the local `install.lua`, which then uses the internet card to
+   fetch the other files from `<url>`.)
+
+4. **Edit `/etc/oc-llm.conf`** and set `base_url` to the address of your LLM
    server (the machine running the model), e.g. `http://<llm-host>:8080`.
-4. Start chatting:
+
+5. Start chatting:
 
    ```
    lua /home/chat.lua

@@ -1,18 +1,21 @@
 -- install.lua -- In-computer installer for the OC LLM harness.
 --
--- Run it on the OpenComputers computer (it needs an internet card):
+-- Run it on the OpenComputers computer (it needs an internet card).
 --
---     lua install <raw_base_url>
+-- Bootstrap (install.lua must be on the computer first — the `lua` command runs
+-- a LOCAL file, it does not download one). Grab it with the built-in wget:
 --
--- <raw_base_url> is the base of the repo's raw file URLs, e.g.
+--     wget -f https://raw.githubusercontent.com/<owner>/<repo>/main/lua/install.lua /home/install.lua
 --
---     https://raw.githubusercontent.com/<owner>/<repo>/main
+-- Then run the installer, pointing it at the repo's raw file base:
 --
--- (the "main" is the branch; use "master" if that's your default branch).
+--     lua /home/install.lua https://raw.githubusercontent.com/<owner>/<repo>/main
+--
+-- ("main" is the branch; use "master" if that's your default branch.)
 --
 -- It downloads the library modules into /lib/, the chat program into /home/,
--- and writes a default /etc/oc-llm.conf (which is where you set the address of
--- your LLM server). It is idempotent: re-running it refreshes the files.
+-- and writes a default /etc/oc-llm.conf (where you set the address of your
+-- local LLM server). It is idempotent: re-running it refreshes the files.
 --
 -- The LLM server address is NOT stored in the repo — it lives in the on-computer
 -- /etc/oc-llm.conf, so the repo stays free of any private network details.
@@ -23,8 +26,9 @@ local internet = require("internet")
 
 local BASE = (arg and arg[1]) or nil
 if not BASE then
-  print("Usage: lua install <raw_base_url>")
-  print("  e.g. lua install https://raw.githubusercontent.com/<owner>/<repo>/main")
+  print("Usage: lua /home/install.lua <raw_base_url>")
+  print("  e.g. lua /home/install.lua https://raw.githubusercontent.com/<owner>/<repo>/main")
+  print("(First get install.lua via: wget -f <.../lua/install.lua> /home/install.lua)")
   return
 end
 -- Normalise: strip a trailing slash.
