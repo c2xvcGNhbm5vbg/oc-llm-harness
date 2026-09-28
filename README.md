@@ -28,6 +28,7 @@ from the computer over the internet card (typically on your LAN).
 | `lua/llm.lua` | An OpenAI-compatible chat client (history, thinking-model handling). |
 | `lua/config.lua` | Loads `/etc/oc-llm.conf` (a simple `key = value` file). |
 | `lua/chat.lua` | The interactive chat REPL you run in-game. |
+| `lua/debug.lua` | In-game test/debug suite (installed with the `debug` keyword). |
 | `lua/install.lua` | In-computer installer: pulls the above from GitHub. |
 | `tests/` | A unit test (`test.lua`) and a real end-to-end test (`e2e.lua`). |
 
@@ -72,6 +73,18 @@ internet-card filtering rules must **allow** the LLM server's address — see
    <url>` runs the local `install.lua`, which then uses the internet card to
    fetch the other files from `<url>`.)
 
+   **Keywords** (positional — see the note below on why they're *not* `--` flags):
+
+   ```
+   lua /home/install.lua <url> debug    also install /home/debug.lua (test suite)
+   lua /home/install.lua version        print which version of install.lua you have
+   ```
+
+   > **CDN caching:** `raw.githubusercontent.com` is served through a CDN that
+   > caches files for a while after a push. If you just got a stale copy (check
+   > with `lua /home/install.lua version`), wait a few minutes and re-`wget`.
+   > Query-string cache-busting (`?nc=1`) does **not** work on that CDN.
+
 4. **Edit `/etc/oc-llm.conf`** and set `base_url` to the address of your LLM
    server (the machine running the model), e.g. `http://<llm-host>:8080`.
 
@@ -95,6 +108,22 @@ internet-card filtering rules must **allow** the LLM server's address — see
 > /help                 show help
 > /quit                exit
 ```
+
+## The in-game debug suite
+
+`debug.lua` exercises the **real** internet card and **real** LLM server (from
+`/etc/oc-llm.conf`) so you can catch problems in-game. Install it with the
+`debug` keyword, then run it:
+
+```
+lua /home/install.lua <url> debug     install the suite
+lua /home/debug.lua                  full suite (card probe, connectivity, small chat, slow generation, multi-turn)
+lua /home/debug.lua quick            fast subset (card probe + connectivity + one chat)
+```
+
+Every run — pass or fail — writes **`/home/oc-llm-debug.log`** with the base_url,
+model, per-test status, chunk counts, replies, and timing. If something fails,
+`cat /home/oc-llm-debug.log` and share the output.
 
 ## Configuration
 
@@ -140,6 +169,10 @@ lua5.3 tests/e2e.lua    # real end-to-end against a local LLM (set LLM_BASE_URL)
 
 ## Notes
 
+- The installer's keywords (`debug`, `version`) are **positional, not `--`
+  flags**: OC's `lua` command runs `shell.parse(...)`, which strips any
+  `--`-prefixed token into an options table and discards it — so `--debug`
+  would never reach the script.
 - The LLM is a **thinking model**: it emits `reasoning` and `content`. With a
   small token budget all output can land in `reasoning` and `content` comes back
   `nil`, so `llm.lua` budgets tokens generously and falls back to the tail of
