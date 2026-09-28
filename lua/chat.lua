@@ -22,7 +22,6 @@
 
 local config = require("config")
 local llm = require("llm")
-local shell = require("shell")
 
 local term = require("term")
 
@@ -120,7 +119,12 @@ end
 banner()
 
 while true do
-  local line = shell.prompt("> ", "")
+  io.write("> ")
+  local line = io.read()
+  if not line then
+    -- EOF (e.g. Ctrl-D) — exit gracefully.
+    break
+  end
   line = line:gsub("%s+$", "")
   if line == "" then
     -- empty line: just re-prompt
