@@ -85,11 +85,18 @@ local function build_request(method, url, body, headers)
   end
 
   -- Wrap as an OC-style request (real card API: finishConnect + response + stream).
+  -- Simulate the real card's in-flight behaviour: the first few reads return an
+  -- EMPTY chunk (response not ready yet), then the body streams in, then nil.
   local pos = 1
+  local reads = 0
   local request = {}
   function request.finishConnect() end
   function request.response() return tonumber(status), "OK", headers end
   function request.read()
+    reads = reads + 1
+    if reads <= 2 then
+      return ""          -- in-flight: empty chunk (status not set yet)
+    end
     if pos > #body then
       return nil
     end

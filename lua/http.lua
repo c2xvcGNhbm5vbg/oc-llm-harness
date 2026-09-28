@@ -21,6 +21,13 @@ local http = {}
 -------------------------------------------------------------------------------
 
 -- Read the whole response stream (body only) into a single string.
+--
+-- The card's read() returns an EMPTY chunk (not nil) while the response is
+-- still in flight, and only sets the status/headers once the stream is ready.
+-- So an empty chunk means "not ready yet" — we must yield (os.sleep) and
+-- re-read, exactly like the OC internet.lua wrapper. A nil return is the true
+-- EOF. This is what makes slow responses work: we keep reading (and yielding)
+-- until the full body has arrived, by which point the status is set.
 local function read_all(request)
   local chunks = {}
   while true do
@@ -31,7 +38,12 @@ local function read_all(request)
       end
       return table.concat(chunks)
     end
-    table.insert(chunks, chunk)
+    if #chunk == 0 then
+      -- No data yet (response in flight) — yield and re-read.
+      if os.sleep then os.sleep(0) end
+    else
+      table.insert(chunks, chunk)
+    end
   end
 end
 
@@ -77,27 +89,32 @@ function http.request(url, opts)
     return nil, reason
   end
 
-  -- Ensure the response is available (blocks; errors if the connection failed).
-  local ok, reason2 = pcall(request.finishConnect)
-  if not ok then
+  -- Best-effort: surface a hard connection error if the card reports one.
+  -- (The card's finishConnect may return false while the response is still
+  --  in flight; that is NOT an error, so we don't fail on a false return.)
+  pcall(request.finishConnect)
+
+  -- Read the body FIRST. This is the operation that blocks until the full
+  -- response has arrived, so by the time it returns the card has also set the
+  -- status/headers. (Reading the body before the status is what makes slow
+  -- responses work — a short reply's status is ready immediately, but a long
+  -- one's status is only set once the body is fully received.)
+  local body, reason3 = read_all(request)
+  if not body then
     pcall(request.close)
-    return nil, reason2
+    return nil, reason3
   end
 
-  -- Status code + headers come from the card, not from the body stream.
+  -- Now the status + headers are available. Poll a generous number of times
+  -- (yielding between attempts) in case the card sets them a tick later.
   local status, _message, rawheaders
-  for _ = 1, 100 do
+  for _ = 1, 500 do
     status, _message, rawheaders = request.response()
     if status then break end
     if os.sleep then os.sleep(0) end
   end
 
-  -- Read the body (the stream yields body bytes only, no headers).
-  local body, reason3 = read_all(request)
   pcall(request.close)
-  if not body then
-    return nil, reason3
-  end
 
   return {
     status = status or 0,
