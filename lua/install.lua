@@ -34,13 +34,22 @@ if not BASE then
   BASE = a and a[1]
 end
 if not BASE then
-  print("Usage: lua /home/install.lua <raw_base_url>")
+  print("Usage: lua /home/install.lua <raw_base_url> [--debug]")
   print("  e.g. lua /home/install.lua https://raw.githubusercontent.com/<owner>/<repo>/main")
+  print("  --debug: also install /home/debug.lua (in-game test suite)")
   print("(First get install.lua via: wget -f <.../lua/install.lua> /home/install.lua)")
   return
 end
 -- Normalise: strip a trailing slash.
 BASE = BASE:gsub("/$", "")
+
+-- Scan the remaining varargs for --debug (install the in-game test suite too).
+local DEBUG = false
+for i = 2, select("#", ...) do
+  if select(i, ...) == "--debug" then
+    DEBUG = true
+  end
+end
 
 if not component.isAvailable("internet") then
   print("This installer needs an internet card installed.")
@@ -100,6 +109,9 @@ local files = {
   { "lua/config.lua", LIB .. "/config.lua" },
   { "lua/chat.lua",   HOME .. "/chat.lua" },
 }
+if DEBUG then
+  table.insert(files, { "lua/debug.lua", HOME .. "/debug.lua" })
+end
 
 print("Installing OC LLM harness from " .. BASE .. " ...")
 ensure_dir(LIB)
@@ -159,6 +171,9 @@ end
 
 if all_ok then
   print("\nDone. Start chatting with:  lua /home/chat.lua")
+  if DEBUG then
+    print("Debug suite installed — run it with:  lua /home/debug.lua")
+  end
 else
   print("\nFinished with errors (see above).")
 end
