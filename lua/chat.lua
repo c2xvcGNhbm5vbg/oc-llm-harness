@@ -23,8 +23,6 @@
 local config = require("config")
 local llm = require("llm")
 
-local term = require("term")
-
 -------------------------------------------------------------------------------
 -- Setup
 -------------------------------------------------------------------------------
@@ -33,7 +31,6 @@ local cfg = config.load()
 llm.configure(cfg)
 
 local function banner()
-  term.setPalette(0)
   print()
   print("=== OpenComputers LLM Chat ===")
   print("model: " .. tostring(cfg.model or "default"))
