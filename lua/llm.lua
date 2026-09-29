@@ -29,6 +29,12 @@ local json = require("json")
 
 local llm = {}
 
+-- Bump on every change so agent.lua (and users) can detect a stale /lib/llm.lua
+-- that predates the current agent.lua — the classic "install said ok, but the
+-- modules are from different commits" failure.
+local VERSION = "1.1.0"
+
+
 local defaults = {
   -- Placeholder: override in /etc/oc-llm.conf (or llm.configure) with the
   -- address of your LLM server.

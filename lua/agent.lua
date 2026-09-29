@@ -29,6 +29,19 @@
 local llm = require("llm")
 local json = require("json")
 
+-- Fail fast with an actionable message if the installed /lib/llm.lua is
+-- older than this agent.lua (missing raw_ask/raw_step). This happens when
+-- install.lua ran against an old branch/commit, or a stale copy survived a
+-- partial install — the crash would otherwise be a bare
+-- "attempt to call a nil value (field 'raw_ask')" with no hint.
+if type(llm.raw_ask) ~= "function" or type(llm.raw_step) ~= "function" then
+  io.write("[agent] ERROR: /lib/llm.lua is out of date (missing raw_ask/raw_step) — it does not match this agent.lua.\n")
+  io.write("[agent] Re-run the installer from the SAME branch as this agent.lua:\n")
+  io.write("[agent]   wget -f <raw_base>/lua/install.lua /home/install.lua\n")
+  io.write("[agent]   lua /home/install.lua <raw_base>\n")
+  error("stale /lib/llm.lua (no raw_ask/raw_step) — reinstall the harness from the same branch", 0)
+end
+
 local agent = {}
 
 -------------------------------------------------------------------------------
