@@ -30,7 +30,7 @@ local fs = require("filesystem")
 local internet = require("internet")
 
 -- Bump this on every change to install.lua so you can tell which copy you have.
-local VERSION = "1.2.0"
+local VERSION = "1.3.0"
 
 -- The `lua` command invokes a script as `pcall(script, table.unpack(args, 2))`,
 -- so command-line arguments arrive as VARARGS (select(1, ...)), not via the
@@ -150,6 +150,8 @@ local files = {
   { "lua/http.lua",   LIB .. "/http.lua" },
   { "lua/llm.lua",    LIB .. "/llm.lua" },
   { "lua/config.lua", LIB .. "/config.lua" },
+  { "lua/agent.lua",     LIB .. "/agent.lua" },
+  { "lua/agent_main.lua", HOME .. "/agent.lua" },
   { "lua/chat.lua",   HOME .. "/chat.lua" },
 }
 if DEBUG then
