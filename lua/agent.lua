@@ -9,12 +9,15 @@
 --   read(path)                -> file contents
 --   write(path, content)     -> create/overwrite a file
 --   edit(path, old, new)     -> replace `old` with `new` in a file
---   bash(command)            -> run a shell command on the host (incl. running
---                              OC programs through the emulator)
+--   bash(command)            -> run a shell command:
+--                              * in-game (no __host_bash): OpenOS's sandboxed
+--                                io.popen — run OC programs in-game with `lua <file>`
+--                              * host-side (emulator, __host_bash present): a real
+--                                host shell — run OC programs via `lua5.2 run.lua <script>`
 --
--- The agent develops OC programs in a working directory and runs them through
--- the OC emulator (`lua5.2 run.lua <script>`), so it can write -> run -> read
--- the output -> fix, iteratively.
+-- The agent develops OC programs in a working directory and runs them (in-game
+-- through the computer's own shell, host-side through the OC emulator), so it
+-- can write -> run -> read the output -> fix, iteratively.
 --
 -- API:
 --   agent.run(task, opts)   -> final text, turns
@@ -143,8 +146,10 @@ local tool_schemas = {
         new = { type = "string" } },
       required = { "path", "old", "new" } } } },
   { type = "function", ["function"] = { name = "bash",
-    description = "Run a shell command on the host. To run an OC program: "
-      .. "lua5.2 run.lua <script>. Args: {command}.",
+    description = "Run a shell command. In-game this is the computer's own (OpenOS) "
+      .. "shell — to run an OC program use `lua <file>`. Host-side (emulator) it is a "
+      .. "real host shell — to run an OC program use `lua5.2 run.lua <script>`. "
+      .. "Args: {command}.",
     parameters = { type = "object",
       properties = { command = { type = "string" } }, required = { "command" } } } },
 }
@@ -166,11 +171,12 @@ Environment:
   `--` flags, so use positional keywords, not `--flags`).
 
 How to run an OC program (you have a bash tool):
-  lua5.2 run.lua <workdir>/<script>
-where <workdir> is the directory your file tools write to (the computer's /home).
-Example: you write "oc-hello.lua", then run
-  lua5.2 run.lua /home/max/oc-emulator/emulator/drive/home/oc-hello.lua
-This boots real OpenOS and runs the script. Use it to test what you write.
+- In-game (on the computer): `lua <file>` — e.g. you write "oc-hello.lua" to
+  /home, then run `lua /home/oc-hello.lua`. This uses the computer's own shell.
+- Host-side (emulator): `lua5.2 run.lua <script>` — e.g.
+  `lua5.2 run.lua <workdir>/oc-hello.lua` (where <workdir> is the directory your
+  file tools write to). This boots real OpenOS and runs the script.
+Use whichever matches your environment to test what you write.
 
 GTNH example projects to model your work after (crop breeding bot, autoPump,
 FoxHUD, autoStock, NIDAS): they poll machines via component APIs, read/write

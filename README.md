@@ -4,6 +4,11 @@ Chat with an LLM from inside a **Minecraft OpenComputers computer** — over the
 computer's **internet card**, talking to any OpenAI-compatible `/v1/chat/completions`
 endpoint (a local vLLM server, the real OpenAI API, etc.).
 
+Beyond a chat REPL, it includes an **agentic coding harness**: a Pi-style loop with
+4 tools (`read`/`write`/`edit`/`bash`) that lets the LLM develop and run
+OpenComputers programs — in-game on the computer, or host-side through the OC
+emulator.
+
 This is a small, dependency-free set of Lua modules for the OpenComputers Lua
 runtime (Lua 5.2 / LuaJ), plus an installer that the computer itself runs to pull
 these files from GitHub over its internet card.
@@ -28,6 +33,8 @@ from the computer over the internet card (typically on your LAN).
 | `lua/llm.lua` | An OpenAI-compatible chat client (history, thinking-model handling). |
 | `lua/config.lua` | Loads `/etc/oc-llm.conf` (a simple `key = value` file). |
 | `lua/chat.lua` | The interactive chat REPL you run in-game. |
+| `lua/agent.lua` | The agentic coding harness (a library: `agent.run(task, opts)`). |
+| `lua/agent_main.lua` | The in-game entry point, deployed to `/home/agent.lua`. |
 | `lua/debug.lua` | In-game test/debug suite (installed with the `debug` keyword). |
 | `lua/install.lua` | In-computer installer: pulls the above from GitHub. |
 | `tests/` | A unit test (`test.lua`) and a real end-to-end test (`e2e.lua`). |
@@ -65,8 +72,15 @@ internet-card filtering rules must **allow** the LLM server's address — see
    lua /home/install.lua https://raw.githubusercontent.com/c2xvcGNhbm5vbg/oc-llm-harness/main
    ```
 
-   It downloads the remaining modules into `/lib/`, the chat program into
-   `/home/`, and writes a default `/etc/oc-llm.conf`.
+   It downloads the remaining modules into `/lib/` (including the agentic
+   harness, `agent.lua`), the chat program and the agent entry point into
+   `/home/` (`chat.lua`, `agent.lua`), and writes a default
+   `/etc/oc-llm.conf`.
+
+   The installer is **versioned** — as of this README it is `install.lua 1.3.0`,
+   which is the first version that deploys the agentic harness. Check the copy
+   you have with the `version` keyword below; if it prints an older version,
+   re-`wget` it.
 
    (How it works: `lua <file>` reads a *local* file named `<file>` and runs it,
    passing everything after the filename as arguments. So `lua /home/install.lua
@@ -124,6 +138,105 @@ lua /home/debug.lua quick            fast subset (card probe + connectivity + on
 Every run — pass or fail — writes **`/home/oc-llm-debug.log`** with the base_url,
 model, per-test status, chunk counts, replies, and timing. If something fails,
 `cat /home/oc-llm-debug.log` and share the output.
+
+## The agentic coding harness
+
+The chat REPL talks to the model one message at a time. The **agentic harness**
+goes further: it gives the model a set of tools and lets it *act* — develop an
+OpenComputers program, run it, read the output, and fix it — until it says it's
+done.
+
+### What it is
+
+`lua/agent.lua` is a **library** exposing `agent.run(task, opts)` → *final text,
+turns*. It runs a **Pi-style loop**:
+
+1. Send the task (or the running conversation) to the model, with the tool
+   schemas.
+2. If the model returns **tool calls**, execute each one, feed the results back
+   as `tool` messages, and **continue**.
+3. If the model returns **no tool calls**, it is done — **stop**.
+
+So the loop **continues iff the model called tools**; the model's plain text
+(with no tool calls) is the final answer.
+
+The **4 tools** (the "primitives, not features" set):
+
+| Tool | What it does |
+|------|--------------|
+| `read(path)` | Read a file's contents. |
+| `write(path, content)` | Create or overwrite a file. |
+| `edit(path, old, new)` | Replace an exact string in a file. |
+| `bash(command)` | Run a shell command (see the two paths below). |
+
+File paths are resolved against a **workdir** (the agent's files live in one
+place); `bash` runs in a **cwd**.
+
+### How to install it
+
+`install.lua` **1.3.0** is the first version that deploys the harness. Running
+the installer (the steps above) now pulls:
+
+- `lua/agent.lua` → `/lib/agent.lua` (the library — `require("agent")` resolves
+  from `/lib`), and
+- `lua/agent_main.lua` → `/home/agent.lua` (the in-game entry point).
+
+If your `lua /home/install.lua version` prints something older than `1.3.0`,
+re-`wget` the installer.
+
+### How to run it in-game
+
+On the OpenComputers computer, from the OpenOS shell:
+
+```
+lua /home/agent.lua <task>
+```
+
+For example:
+
+```
+lua /home/agent.lua Write a crop-breeding bot
+```
+
+The entry point (`/home/agent.lua`) loads `/etc/oc-llm.conf` (the same config
+the chat REPL uses), then calls `agent.run` with:
+
+- `workdir = /home` — the agent's files live on the computer's `/home`,
+- `max_turns = 10`,
+- `out = print` — progress (the model's text, each tool call, each result) prints
+  to the terminal.
+
+With no task, a default prompt is used. The final response is printed at the end.
+
+### The in-game `bash` path
+
+In-game, the `bash` tool runs commands through the computer's own shell —
+**OpenOS's `io.popen`** (OpenOS ships it via `pipe`/`sh`). That shell is
+sandboxed to the computer's drive, so the agent can **execute OpenComputers
+programs in-game** the same way you would:
+
+```
+lua <file>
+```
+
+i.e. it writes a program to `/home`, then `bash`s `lua /home/<file>` to run it,
+reads the output, and iterates.
+
+### The host-side development path
+
+The same `agent.lua` also runs **host-side** for development, without Minecraft.
+There, the `__host_*` globals (emulator-only — they do **not** exist in-game)
+take over:
+
+- `__host_bash` — a real host shell, so the agent can run host commands such as
+  `lua5.2 run.lua <script>` to boot the **OC emulator** and run what it wrote;
+- `__host_write` / `__host_read` — host filesystem access for the file tools.
+
+So host-side the agent develops OC programs and runs them through the emulator
+(`lua5.2 run.lua <script>`), while in-game it runs them through the computer's
+own shell (`lua <file>` via `io.popen`). The module picks whichever path is
+available: it uses `__host_bash` when present and falls back to `io.popen`
+otherwise.
 
 ## Configuration
 
