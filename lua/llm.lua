@@ -168,5 +168,99 @@ function llm.ask(user_text, opts)
 end
 
 -------------------------------------------------------------------------------
+-- raw_ask: like ask, but returns the FULL assistant message (incl. tool_calls)
+-- so an agent loop can inspect tool calls. Returns (message, nil) or (nil, reason).
+-- message = { content = <string>, tool_calls = <table|nil>, reasoning = <string|nil> }.
+function llm.raw_ask(user_text, opts)
+  opts = opts or {}
+  local messages = build_messages()
+  table.insert(messages, {role = "user", content = user_text})
+
+  local payload = {
+    model = cfg.model,
+    messages = messages,
+    max_tokens = opts.max_tokens or cfg.max_tokens,
+    temperature = opts.temperature or cfg.temperature,
+  }
+  if opts.tools then payload.tools = opts.tools end
+  if opts.no_think then
+    messages[#messages].content = messages[#messages].content .. " no_think"
+  end
+
+  local resp, reason = http.post_json(cfg.base_url .. "/v1/chat/completions", payload, {
+    timeout = cfg.timeout,
+  })
+  if not resp then
+    return nil, "request failed: " .. reason
+  end
+  if resp.status < 200 or resp.status >= 300 then
+    return nil, "HTTP " .. resp.status .. ": " .. truncate(resp.body, 300)
+  end
+  local parsed, reason2 = json.decode(resp.body)
+  if not parsed then
+    return nil, "bad JSON from model: " .. reason2 .. " body: " .. truncate(resp.body, 200)
+  end
+  local choices = parsed.choices
+  if not choices or #choices == 0 then
+    return nil, "no choices in response: " .. truncate(resp.body, 300)
+  end
+  local message = choices[1].message or {}
+  local content = message.content
+  local reasoning = message.reasoning
+  if (not content or content == "") and reasoning and reasoning ~= "" then
+    content = tostring(reasoning):sub(-300)
+  end
+  -- Record the exchange (store the full message so tool_calls are kept in history).
+  table.insert(history, {role = "user", content = user_text})
+  local stored = {role = "assistant", content = content}
+  if message.tool_calls then stored.tool_calls = message.tool_calls end
+  table.insert(history, stored)
+  return message
+end
+
+-------------------------------------------------------------------------------
+-- raw_step: send the CURRENT history (no new user message) and append the
+-- assistant response. Used by the agent loop for turns after the first.
+function llm.raw_step(opts)
+  opts = opts or {}
+  local messages = build_messages()
+  local payload = {
+    model = cfg.model,
+    messages = messages,
+    max_tokens = opts.max_tokens or cfg.max_tokens,
+    temperature = opts.temperature or cfg.temperature,
+  }
+  if opts.tools then payload.tools = opts.tools end
+  if opts.no_think then
+    messages[#messages].content = messages[#messages].content .. " no_think"
+  end
+  local resp, reason = http.post_json(cfg.base_url .. "/v1/chat/completions", payload, {
+    timeout = cfg.timeout,
+  })
+  if not resp then return nil, "request failed: " .. reason end
+  if resp.status < 200 or resp.status >= 300 then
+    return nil, "HTTP " .. resp.status .. ": " .. truncate(resp.body, 300)
+  end
+  local parsed, reason2 = json.decode(resp.body)
+  if not parsed then
+    return nil, "bad JSON from model: " .. reason2 .. " body: " .. truncate(resp.body, 200)
+  end
+  local choices = parsed.choices
+  if not choices or #choices == 0 then
+    return nil, "no choices in response: " .. truncate(resp.body, 300)
+  end
+  local message = choices[1].message or {}
+  local content = message.content
+  local reasoning = message.reasoning
+  if (not content or content == "") and reasoning and reasoning ~= "" then
+    content = tostring(reasoning):sub(-300)
+  end
+  local stored = {role = "assistant", content = content}
+  if message.tool_calls then stored.tool_calls = message.tool_calls end
+  table.insert(history, stored)
+  return message
+end
+
+-------------------------------------------------------------------------------
 
 return llm
