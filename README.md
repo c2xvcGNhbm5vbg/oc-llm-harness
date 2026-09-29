@@ -37,6 +37,7 @@ from the computer over the internet card (typically on your LAN).
 | `lua/agent_main.lua` | The in-game entry point, deployed to `/home/agent.lua`. |
 | `lua/debug.lua` | In-game test/debug suite (installed with the `debug` keyword). |
 | `lua/install.lua` | In-computer installer: pulls the above from GitHub. |
+| `docs/oc/` | Skill reference docs (core API, robot, GTNH-fork extras) → `/lib/ocdocs/`. |
 | `tests/` | A unit test (`test.lua`) and a real end-to-end test (`e2e.lua`). |
 
 ## How it works
@@ -53,6 +54,26 @@ The computer's **internet card** makes the HTTP request to your LLM server. Your
 server must be reachable from the computer and (importantly) the computer's
 internet-card filtering rules must **allow** the LLM server's address — see
 [Internet card filtering](#internet-card-filtering) below.
+
+## Prerequisites (the in-game computer)
+
+Before installing, the OpenComputers computer must have:
+
+- **An internet card** — required. The whole harness is HTTP over the card;
+  without it nothing works. (See [Internet card filtering](#internet-card-filtering)
+  to make sure the card is *allowed* to reach your LLM server.)
+- **RAM — minimum 1 MB, recommended 2 MB.** A single top-tier RAM stick is
+  1 MB (the maxed-out computer is 2 × 1 MB = 2 MB). 1 MB runs OpenOS + the
+  harness + a small program; 2 MB gives comfortable headroom while the agent
+  writes and runs programs.
+- **A drive (HDD) — any tier (1–4 MB).** The agent writes its programs to
+  `/home` and runs them there; `/tmp` is only 64 KB. A 1 MB HDD is fine for
+  small programs; a 4 MB HDD (tier 3) is comfortable.
+- **A reachable LLM server** — the server must be on a network the computer can
+  reach, and the computer's internet-card filtering rules must allow its address.
+
+A screen and keyboard are **not** required — the agent is non-interactive — but a
+terminal to watch the output is handy.
 
 ## Install (in-game)
 
@@ -77,8 +98,8 @@ internet-card filtering rules must **allow** the LLM server's address — see
    `/home/` (`chat.lua`, `agent.lua`), and writes a default
    `/etc/oc-llm.conf`.
 
-   The installer is **versioned** — as of this README it is `install.lua 1.3.0`,
-   which is the first version that deploys the agentic harness. Check the copy
+   The installer is **versioned** — as of this README it is `install.lua 1.4.0`,
+   which deploys the agentic harness and the skill docs. Check the copy
    you have with the `version` keyword below; if it prints an older version,
    re-`wget` it.
 
@@ -174,14 +195,15 @@ place); `bash` runs in a **cwd**.
 
 ### How to install it
 
-`install.lua` **1.3.0** is the first version that deploys the harness. Running
+`install.lua` **1.4.0** deploys the harness and the skill docs. Running
 the installer (the steps above) now pulls:
 
 - `lua/agent.lua` → `/lib/agent.lua` (the library — `require("agent")` resolves
-  from `/lib`), and
-- `lua/agent_main.lua` → `/home/agent.lua` (the in-game entry point).
+  from `/lib`),
+- `lua/agent_main.lua` → `/home/agent.lua` (the in-game entry point), and
+- `docs/oc/*.md` → `/lib/ocdocs/` (the skill reference docs the agent reads on demand).
 
-If your `lua /home/install.lua version` prints something older than `1.3.0`,
+If your `lua /home/install.lua version` prints something older than `1.4.0`,
 re-`wget` the installer.
 
 ### How to run it in-game
