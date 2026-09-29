@@ -30,7 +30,7 @@ local fs = require("filesystem")
 local internet = require("internet")
 
 -- Bump this on every change to install.lua so you can tell which copy you have.
-local VERSION = "1.3.0"
+local VERSION = "1.4.0"
 
 -- The `lua` command invokes a script as `pcall(script, table.unpack(args, 2))`,
 -- so command-line arguments arrive as VARARGS (select(1, ...)), not via the
@@ -144,6 +144,7 @@ end
 local LIB = "/lib"
 local HOME = "/home"
 local ETC = "/etc"
+local OCDATA = "/lib/ocdocs"
 
 local files = {
   { "lua/json.lua",   LIB .. "/json.lua" },
@@ -153,6 +154,10 @@ local files = {
   { "lua/agent.lua",     LIB .. "/agent.lua" },
   { "lua/agent_main.lua", HOME .. "/agent.lua" },
   { "lua/chat.lua",   HOME .. "/chat.lua" },
+  { "docs/oc/README.md",      OCDATA .. "/README.md" },
+  { "docs/oc/core-api.md",   OCDATA .. "/core-api.md" },
+  { "docs/oc/robot.md",      OCDATA .. "/robot.md" },
+  { "docs/oc/gtnh-extras.md", OCDATA .. "/gtnh-extras.md" },
 }
 if DEBUG then
   table.insert(files, { "lua/debug.lua", HOME .. "/debug.lua" })
@@ -162,6 +167,7 @@ print("Installing OC LLM harness (install.lua " .. VERSION .. ") from " .. BASE 
 ensure_dir(LIB)
 ensure_dir(HOME)
 ensure_dir(ETC)
+ensure_dir(OCDATA)
 
 local all_ok = true
 for _, f in ipairs(files) do
