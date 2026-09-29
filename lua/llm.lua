@@ -18,7 +18,7 @@
 -- Default config (override with llm.configure):
 --   base_url   = "http://127.0.0.1:8080"   -- the LLM host (set this to the
 --                                          -- actual address of your LLM server)
---   model      = "qwen3.8-27b-vllm"
+--   model      = "qwen3.8-paro-int5-swift"
 --   max_tokens = 1024
 --   temperature = 0.7
 --   system     = "You are a helpful assistant living inside a Minecraft OpenComputers computer. Be concise."
@@ -33,7 +33,7 @@ local defaults = {
   -- Placeholder: override in /etc/oc-llm.conf (or llm.configure) with the
   -- address of your LLM server.
   base_url = "http://127.0.0.1:8080",
-  model = "qwen3.8-27b-vllm",
+  model = "qwen3.8-paro-int5-swift",
   max_tokens = 1024,
   temperature = 0.7,
   system = "You are a helpful assistant living inside a Minecraft "

@@ -30,7 +30,7 @@ local fs = require("filesystem")
 local internet = require("internet")
 
 -- Bump this on every change to install.lua so you can tell which copy you have.
-local VERSION = "1.4.0"
+local VERSION = "1.4.1"
 
 -- The `lua` command invokes a script as `pcall(script, table.unpack(args, 2))`,
 -- so command-line arguments arrive as VARARGS (select(1, ...)), not via the
@@ -104,27 +104,67 @@ end
 -------------------------------------------------------------------------------
 
 local function download(url, path)
-  local request, reason = internet.request(url, nil, {["user-agent"] = "OC-LLM-Installer/1.0"})
+  local request, reason = internet.request(url, nil,
+    {["user-agent"] = "OC-LLM-Installer/1.0", ["Connection"] = "close"})
   if not request then
     return false, reason
   end
 
-  local f, reason2 = io.open(path, "wb")
-  if not f then
-    request.close()
-    return false, "cannot open " .. path .. " for writing: " .. reason2
-  end
+  -- Real card API (see http.lua): finishConnect, then read the body-only
+  -- stream (the status is only set once the body has fully arrived), then
+  -- poll response() for the status. We buffer the body and only write it to
+  -- disk on a 200 — a 404/403 body is NOT the file. (The previous version
+  -- wrote the body unconditionally, so a failed fetch left a bogus "ok" file
+  -- in place of the real one — the stale-file bug.)
+  pcall(request.finishConnect)
 
+  local body = {}
+  local bytes = 0
   local ok, reason3 = pcall(function()
     for chunk in request do
-      f:write(chunk)
+      if chunk and #chunk > 0 then
+        body[#body + 1] = chunk
+        bytes = bytes + #chunk
+      end
+    end
+  end)
+  if not ok then
+    pcall(request.close)
+    return false, "download failed: " .. tostring(reason3)
+  end
+
+  -- Poll for the status (the card sets it once the body has fully arrived),
+  -- then close. Same sequence as http.lua:request.
+  local status
+  for _ = 1, 500 do
+    status = request.response()
+    if status then break end
+    if os.sleep then os.sleep(0) end
+  end
+  pcall(request.close)
+  if status ~= 200 then
+    return false, "HTTP " .. tostring(status)
+  end
+  if bytes == 0 then
+    return false, "empty response body"
+  end
+
+  local f, reason2 = io.open(path, "wb")
+  if not f then
+    return false, "cannot open " .. path .. " for writing: " .. reason2
+  end
+  local ok2, reason4 = pcall(function()
+    for _, chunk in ipairs(body) do
+      if not f:write(chunk) then
+        error("write failed (drive full?)")
+      end
     end
   end)
   f:close()
-  if not ok then
-    return false, "download failed: " .. reason3
+  if not ok2 then
+    return false, "write failed: " .. tostring(reason4)
   end
-  return true
+  return true, bytes
 end
 
 -------------------------------------------------------------------------------
@@ -179,9 +219,9 @@ for _, f in ipairs(files) do
   end
   local ok, reason = download(url, f[2])
   if ok then
-    print("  ok   " .. f[2])
+    print("  ok   " .. f[2] .. " (" .. tostring(reason) .. " bytes)")
   else
-    print("  FAIL " .. f[2] .. "  (" .. reason .. ")")
+    print("  FAIL " .. f[2] .. "  (" .. tostring(reason) .. ")")
     all_ok = false
   end
 end
@@ -201,7 +241,7 @@ if not fs.exists(CONF) then
       "# OC LLM harness configuration",
       "# Set base_url to the address of your LLM server (OpenAI-compatible API).",
       "base_url = http://127.0.0.1:8080",
-      "model = qwen3.8-27b-vllm",
+      "model = qwen3.8-paro-int5-swift",
       "max_tokens = 1024",
       "temperature = 0.7",
       "timeout = 120",
