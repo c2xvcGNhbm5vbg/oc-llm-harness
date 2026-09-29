@@ -48,7 +48,28 @@ for _, p in ipairs({ "/lib/llm.lua", "/home/llm.lua", "/lib/agent.lua", "/home/a
   say(string.format("  on disk  %s  =  %s", p, n and (n .. " bytes") or "absent"))
 end
 
--- 4. What require() actually gives us.
+-- 4b. Fingerprint /lib/llm.lua so a corrupted download is provable:
+--     FNV-1a 32-bit hash + does the text "raw_ask" appear in the file?
+local function fnv1a32(s)
+  local h = 0x811c9dc5
+  for i = 1, #s do
+    h = bit32.bxor(h, s:byte(i))
+    -- h * 0x01000193 = h*0x193 + h*2^24 (split to stay within 5.2's 53-bit ints)
+    h = bit32.band(h * 0x193 + bit32.lshift(h, 24), 0xFFFFFFFF)
+  end
+  return string.format("0x%08x", h)
+end
+local lf = io.open("/lib/llm.lua", "rb")
+if lf then
+  local data = lf:read("*a")
+  lf:close()
+  local has_rawask = data:find("raw_ask", 1, true) and "yes" or "NO"
+  local has_version = data:find("VERSION", 1, true) and "yes" or "NO"
+  say(string.format("  /lib/llm.lua fingerprint: fnv1a=%s  contains raw_ask=%s  contains VERSION=%s",
+                    fnv1a32(data), has_rawask, has_version))
+end
+
+-- 5. What require() actually gives us.
 local ok, llm = pcall(require, "llm")
 if ok then
   local extra = ""
